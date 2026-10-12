@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="GradeAlign — a grading-consistency analyzer for professors: generate a standards-aligned rubric from an assignment prompt, batch-score student papers with AI (or manually), and measure the deviation between rubric scores and your grades. Static, private, no account.">
+  <title>GradeAlign — Grading Consistency Analyzer</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23a4543a'/><text x='3' y='12' font-size='11' font-family='Georgia' fill='%23faf6ef'>R</text></svg>">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1 class="site-title">GradeAlign</h1>
+      <p class="site-tagline">A grading-consistency analyzer for professors. Paste an assignment, generate a standards-aligned rubric (AACSB Assurance of Learning, AAC&amp;U VALUE-aligned, or discipline templates), batch-score student papers with your own AI endpoint or by hand, then see exactly where the rubric's scores deviate from your grades. No account, no server — student work stays in your browser; text is sent only to your own AI endpoint, only when you click "Score with AI".</p>
+    </div>
+  </header>
+
+  <nav class="tab-bar" role="tablist" aria-label="Tools">
+    <div class="wrap tab-bar-inner">
+      <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-rubric" id="tab-rubric" data-tab="rubric">Assignment &amp; Rubric</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-score" id="tab-score" data-tab="score">Upload &amp; Score</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-report" id="tab-report" data-tab="report">Deviation Report</button>
+      <span class="tab-spacer"></span>
+      <button class="tab-btn util" id="open-settings" type="button">AI &amp; Data</button>
+    </div>
+  </nav>
+
+  <main class="wrap">
+
+    <!-- ================= TAB 1: ASSIGNMENT & RUBRIC ================= -->
+    <section class="tab-panel active" id="panel-rubric" role="tabpanel" aria-labelledby="tab-rubric">
+      <h2>Assignment &amp; rubric</h2>
+      <p class="panel-intro">Provide the assignment prompt, pick a standard, and generate an editable rubric. All rubric text bundled with GradeAlign is original writing aligned to the named standards — descriptors are never copied from published rubrics.</p>
+
+      <div class="import-grid">
+        <div class="card import-card">
+          <h3 class="prompt-heading">1. Assignment prompt</h3>
+          <p class="hint">Upload the assignment as PDF (parsed in-browser with pdf.js), DOCX (mammoth.js), or TXT — or paste the text below. Nothing is uploaded anywhere.</p>
+          <div class="button-row">
+            <label class="btn file-btn" for="assignment-file">Choose PDF / DOCX / TXT</label>
+            <input type="file" id="assignment-file" accept=".pdf,.docx,.txt" class="hidden">
+          </div>
+          <textarea id="assignment-text" rows="8" spellcheck="false" placeholder="Paste the assignment prompt here — the task, length, deliverable, and any grading notes…"></textarea>
+          <p class="status-line" id="assignment-status" aria-live="polite"></p>
+          <p class="hint" id="type-suggestion"></p>
+        </div>
+
+        <div class="card import-card">
+          <h3 class="prompt-heading">2. Standard &amp; generation</h3>
+          <label class="field-label" for="standard-select">Standard / template</label>
+          <select id="standard-select"></select>
+          <p class="hint" id="standard-info"></p>
+          <label class="field-label" for="type-select">Assignment type <span class="hint-inline">— auto-suggested from the text; override if needed</span></label>
+          <select id="type-select">
+            <option value="generic">Generic</option>
+            <option value="research">Research paper</option>
+            <option value="case">Case analysis</option>
+            <option value="presentation">Presentation</option>
+            <option value="lab">Lab / technical report</option>
+            <option value="reflective">Reflective essay</option>
+            <option value="essay">Essay / position paper</option>
+          </select>
+          <div class="button-row">
+            <button id="gen-template" class="btn primary">Generate rubric from template</button>
+            <button id="gen-ai" class="btn">Generate with AI (tailored)</button>
+          </div>
+          <p class="hint">AI generation tailors every descriptor to your assignment text using your own OpenAI-compatible endpoint (configure under <strong>AI &amp; Data</strong>). Without a key, the template generator gives you a complete standard-aligned rubric.</p>
+          <p class="status-line" id="gen-status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <h3>3. Rubric editor <span class="hint-inline" id="rubric-meta"></span></h3>
+      <div id="rubric-empty" class="card">
+        <p class="hint" style="margin:0;">No rubric yet — generate one above, or start from scratch: <button id="gen-custom" class="btn small" type="button">New custom rubric</button></p>
+      </div>
+      <div id="rubric-editor" class="hidden">
+        <div class="field-grid" style="margin-bottom:0.9rem;">
+          <div>
+            <label class="field-label" for="rubric-name">Rubric name</label>
+            <input type="text" id="rubric-name">
+          </div>
+        </div>
+        <div class="rubric-scroll">
+          <table class="rubric-grid" id="rubric-grid">
+            <thead>
+              <tr>
+                <th class="crit-col">Criterion <span class="hint-inline">(name, weight %, focus)</span></th>
+                <!-- level headers injected -->
+              </tr>
+            </thead>
+            <tbody id="rubric-tbody"></tbody>
+          </table>
+        </div>
+        <div class="button-row">
+          <button id="add-criterion" class="btn small" type="button">+ Add criterion</button>
+          <button id="export-rubric-docx" class="btn small" type="button">Export rubric .docx</button>
+          <button id="export-rubric-json" class="btn small" type="button">Export rubric .json</button>
+          <label class="btn small ghost file-btn" for="import-rubric-json">Import rubric .json</label>
+          <input type="file" id="import-rubric-json" accept=".json" class="hidden">
+        </div>
+        <p class="status-line" id="rubric-status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- ================= TAB 2: UPLOAD & SCORE ================= -->
+    <section class="tab-panel" id="panel-score" role="tabpanel" aria-labelledby="tab-score">
+      <h2>Upload &amp; score</h2>
+      <p class="panel-intro">Upload up to 20 student papers (PDF / DOCX / TXT — text is extracted locally), enter your own grade for each, then score the batch with AI or by hand with the rubric. <strong>Privacy:</strong> papers never leave this browser except to the AI endpoint you configure, and only when you run AI scoring.</p>
+
+      <div class="import-grid">
+        <div class="card import-card">
+          <h3 class="prompt-heading">1. Batch upload <span class="hint-inline" id="paper-count-label"></span></h3>
+          <div class="button-row">
+            <label class="btn file-btn" for="papers-file">Add papers (PDF / DOCX / TXT)</label>
+            <input type="file" id="papers-file" accept=".pdf,.docx,.txt" multiple class="hidden">
+            <button id="clear-papers" class="btn small danger" type="button">Clear all</button>
+          </div>
+          <label class="check-item" style="margin-top:0.4rem;">
+            <input type="checkbox" id="anonymize-toggle" checked>
+            <span>Anonymize names — show papers as <em>Paper 1…N</em> instead of file names</span>
+          </label>
+          <p class="status-line" id="papers-status" aria-live="polite"></p>
+        </div>
+
+        <div class="card import-card">
+          <h3 class="prompt-heading">2. Your grades</h3>
+          <div class="field-grid">
+            <div>
+              <label class="field-label" for="max-points">Assignment max points</label>
+              <input type="number" id="max-points" min="1" max="1000" step="1" value="100">
+            </div>
+          </div>
+          <p class="hint">Enter your grade per paper in the table below, or import a CSV with columns <code>paper,grade</code> — paper may be the file name, <code>Paper 3</code>, or the row number. Grades are on the 0–max-points scale.</p>
+          <div class="button-row">
+            <label class="btn small file-btn" for="grades-csv">Import grades CSV</label>
+            <input type="file" id="grades-csv" accept=".csv,text/csv" class="hidden">
+          </div>
+          <p class="status-line" id="grades-status" aria-live="polite"></p>
+        </div>
+
+        <div class="card import-card">
+          <h3 class="prompt-heading">3. Scoring</h3>
+          <div class="button-row">
+            <button id="score-ai" class="btn primary">Score all with AI</button>
+            <button id="score-stop" class="btn danger hidden">Stop</button>
+          </div>
+          <div class="check-progress hidden" id="score-progress-wrap">
+            <div class="progress-track"><div class="progress-fill" id="score-progress-fill"></div></div>
+            <div class="progress-label" id="score-progress-label">0 / 0</div>
+          </div>
+          <p class="hint">AI scoring sends each paper's text plus the rubric to your endpoint — 3 papers at a time, with automatic retries. No key? Click any paper below to score it manually against the rubric; the deviation analytics work the same either way.</p>
+          <p class="status-line" id="score-status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div id="papers-empty" class="card"><p class="hint" style="margin:0;">No papers uploaded yet.</p></div>
+      <div class="rubric-scroll hidden" id="papers-wrap">
+        <table class="doc-table papers-table" id="papers-table">
+          <thead>
+            <tr>
+              <th>Paper</th>
+              <th>Words</th>
+              <th>Extraction</th>
+              <th>Your grade</th>
+              <th>Rubric/AI score</th>
+              <th>Scoring status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="papers-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Manual scoring drawer -->
+      <div id="manual-score" class="card hidden">
+        <h3 class="prompt-heading" id="manual-score-title">Manual scoring</h3>
+        <p class="hint">Score each criterion 1–4 against the rubric descriptors. The rubric total is computed automatically on the assignment's max-points scale.</p>
+        <div id="manual-score-body"></div>
+        <div class="button-row">
+          <button id="manual-score-save" class="btn primary">Save scores</button>
+          <button id="manual-score-close" class="btn ghost">Close</button>
+          <span class="status-line ok" id="manual-score-total"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 3: DEVIATION REPORT ================= -->
+    <section class="tab-panel" id="panel-report" role="tabpanel" aria-labelledby="tab-report">
+      <h2>Deviation report</h2>
+      <p class="panel-intro">How far the rubric/AI scores sit from your own grades — per paper, per criterion, and in aggregate. Deviation = rubric score − your grade, so positive means the rubric scored higher.</p>
+
+      <div class="card">
+        <div class="field-grid">
+          <div>
+            <label class="field-label" for="threshold-pct">Flag threshold <span class="hint-inline">— |deviation| as % of max points</span></label>
+            <input type="number" id="threshold-pct" min="1" max="100" step="1" value="10">
+          </div>
+        </div>
+      </div>
+
+      <div id="report-empty" class="card"><p class="hint" style="margin:0;">Nothing to analyze yet — upload papers, enter your grades, and score them in the Upload &amp; Score tab.</p></div>
+
+      <div id="report-body" class="hidden">
+        <div class="stat-grid" id="stat-grid"></div>
+
+        <h3>Per-paper deviations</h3>
+        <div class="rubric-scroll">
+          <table class="doc-table" id="dev-table">
+            <thead>
+              <tr>
+                <th>Paper</th><th>Your grade</th><th>Rubric/AI score</th><th>Deviation (pts)</th><th>Deviation (%)</th><th>Flag</th>
+              </tr>
+            </thead>
+            <tbody id="dev-tbody"></tbody>
+          </table>
+        </div>
+
+        <h3>Charts</h3>
+        <div class="chart-grid">
+          <div class="card"><h4 class="prompt-heading">Your grade vs rubric/AI score</h4><div id="chart-scatter"></div></div>
+          <div class="card"><h4 class="prompt-heading">Average rubric score per criterion</h4><div id="chart-bars"></div></div>
+        </div>
+
+        <h3>Interpretation</h3>
+        <div class="card"><ul class="interp-list" id="interpretation"></ul></div>
+
+        <div class="button-row">
+          <button id="export-report-docx" class="btn primary">Export report .docx</button>
+          <button id="export-scores-csv" class="btn">Export scores .csv</button>
+        </div>
+        <p class="status-line" id="report-status" aria-live="polite"></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- AI & Data modal -->
+  <div id="settings-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-card">
+      <h3 id="settings-title" class="prompt-heading">AI settings <span class="badge neutral">optional</span></h3>
+      <p class="hint">Any OpenAI-compatible chat-completions endpoint. Endpoint, model, and key are stored <strong>only</strong> in this browser's localStorage and sent only to that endpoint. Everything in GradeAlign has a template/manual fallback.</p>
+      <div class="ai-fields">
+        <div>
+          <label class="field-label" for="ai-endpoint">Endpoint base URL</label>
+          <input type="url" id="ai-endpoint" placeholder="https://api.openai.com/v1" autocomplete="off" spellcheck="false">
+        </div>
+        <div>
+          <label class="field-label" for="ai-model">Model</label>
+          <input type="text" id="ai-model" placeholder="gpt-4o-mini" autocomplete="off" spellcheck="false">
+        </div>
+        <div>
+          <label class="field-label" for="ai-key">API key</label>
+          <input type="password" id="ai-key" placeholder="sk-…" autocomplete="off">
+        </div>
+      </div>
+      <div class="button-row">
+        <button id="ai-save" class="btn primary">Save AI settings</button>
+        <button id="ai-clear" class="btn danger">Clear key</button>
+        <span class="status-line" id="ai-status"></span>
+      </div>
+
+      <hr class="divider">
+
+      <h3 class="prompt-heading">Project data</h3>
+      <p class="hint">The whole project — assignment, rubric, papers (including extracted text), grades, and scores — persists in this browser's localStorage. Export it to move between computers or archive a class.</p>
+      <div class="button-row">
+        <button id="project-export" class="btn">Export project .json</button>
+        <label class="btn file-btn" for="project-import">Import project .json</label>
+        <input type="file" id="project-import" accept=".json" class="hidden">
+        <button id="project-reset" class="btn danger">Reset everything</button>
+      </div>
+      <p class="status-line" id="project-status" aria-live="polite"></p>
+
+      <div class="button-row"><button id="settings-close" class="btn ghost">Close</button></div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p><strong>Privacy:</strong> student work stays in your browser. Extracted paper text is stored only in localStorage and is transmitted solely to the AI endpoint you configure, only when you run AI scoring. Rubric templates bundled with GradeAlign are original descriptors <em>aligned to</em> the AACSB 2020 accreditation standards (Assurance of Learning) and the dimension structure of the AAC&amp;U VALUE rubrics — no published rubric text is reproduced. Sources and check dates are shown per standard in the data file. AI-generated scores are advisory; review them before relying on the analysis.</p>
+    </div>
+  </footer>
+
+  <script src="js/data/standards.js"></script>
+  <script src="js/rubric.js"></script>
+  <script src="js/analysis.js"></script>
+  <script src="js/scoring.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
